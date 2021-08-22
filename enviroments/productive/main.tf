@@ -1,18 +1,3 @@
-variable "gcp_project_id" {
-  type = string
-  default = "goofing"
-}
-
-variable "gcp_region" {
-  type = string
-  default = "us-central1"
-}
-
-variable "gcp_region_zone" {
-  type = string
-  default = "us-central1-c"
-}
-
 provider "google" {
   project = var.gcp_project_id
   region  = var.gcp_region
@@ -20,15 +5,6 @@ provider "google" {
   user_project_override = true
   credentials = "${dirname(path.module)}/private_files/gcp_key.json"
   version = "3.65"
-}
-
-resource "google_compute_project_metadata" "ssh_keys" {
-  project = var.gcp_project_id
-  metadata = {
-    ssh-keys = <<EOF
-      ubuntu:${file("${dirname(path.module)}/private_files/ssh_client.pub")}
-    EOF
-  }
 }
 
 resource "google_compute_network" "vpc_network" {
@@ -58,33 +34,14 @@ resource "google_compute_firewall" "public_firewall" {
   target_tags = ["ssh"]
 }
 
-resource "google_compute_instance" "vm_instance" {
-  name         = "${var.gcp_project_id}-instance"
-  machine_type = "e2-micro"
-  allow_stopping_for_update = true
-
-  tags = [ "ssh" ]
-
-  metadata = {
-    "ssh-keys" = "ubuntu:${file("${dirname(path.module)}/private_files/ssh_client.pub")}"
-  }
-
-  boot_disk {
-    auto_delete = true
-    initialize_params {
-      image = "ubuntu-2004-focal-v20210720"
-      size = 30
-      type = "pd-standard"
+module "gcp_free_instance" {
+  source = "../../modules/compute_instance"
+  gcp_project_id = var.gcp_project_id
+  ssh_keys=[
+    {
+      user = "ubuntu"
+      filepath = "${dirname(path.module)}/private_files/ssh_client.pub"
     }
-  }
-
-  network_interface {
-    subnetwork = google_compute_subnetwork.public_subnetwork.self_link
-    access_config {
-    }
-  }
-
-  depends_on = [
-    google_compute_project_metadata.ssh_keys
   ]
+  public_subnet_self_link = google_compute_subnetwork.public_subnetwork.self_link
 }
